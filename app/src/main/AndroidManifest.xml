@@ -45,5 +45,11 @@
             android:name=".MessagesActivity"
             android:exported="true" />
 
+        <!-- 설정 화면 -->
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
     </application>
 </manifest>

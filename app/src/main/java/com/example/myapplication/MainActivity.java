@@ -130,6 +130,7 @@ public class MainActivity extends AppCompatActivity {
         btnMenu.setOnClickListener(view -> {
             PopupMenu popupMenu = new PopupMenu(MainActivity.this, btnMenu);
             popupMenu.getMenuInflater().inflate(R.menu.menu_main, popupMenu.getMenu());
+            
             popupMenu.setOnMenuItemClickListener(item -> {
                 int itemId = item.getItemId();
                 if (itemId == R.id.menu_logout) {
@@ -140,10 +141,10 @@ public class MainActivity extends AppCompatActivity {
                     Intent intent = new Intent(MainActivity.this, MessagesActivity.class);
                     startActivity(intent);
                     return true;
-                }
-                else if (itemId == R.id.menu_account) {
-                    // 설정 화면으로 이동 (구현 필요)
-                    Toast.makeText(MainActivity.this, "설정 메뉴를 선택했습니다.", Toast.LENGTH_SHORT).show();
+                } else if (itemId == R.id.menu_account) {
+                    // 설정 화면으로 이동
+                    Intent intent = new Intent(MainActivity.this, SettingsActivity.class);
+                    startActivity(intent);
                     return true;
                 }
                 return false;

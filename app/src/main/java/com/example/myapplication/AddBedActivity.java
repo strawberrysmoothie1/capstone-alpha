@@ -232,8 +232,9 @@ public class AddBedActivity extends AppCompatActivity {
                     startActivity(intent);
                     return true;
                 } else if (itemId == R.id.menu_account) {
-                    // 설정 화면으로 이동 (구현 필요)
-                    Toast.makeText(AddBedActivity.this, "설정 메뉴를 선택했습니다.", Toast.LENGTH_SHORT).show();
+                    // 설정 화면으로 이동
+                    Intent intent = new Intent(AddBedActivity.this, SettingsActivity.class);
+                    startActivity(intent);
                     return true;
                 }
                 return false;
