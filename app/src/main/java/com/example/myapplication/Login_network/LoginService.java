@@ -17,10 +17,7 @@ public interface LoginService {
     Call<RegisterResponse> register(@Body RegisterRequest request);
 
     @POST("/api/logout")
-    Call<LogoutResponse> logout(@Body LogoutRequest request);
-
-    @POST("/api/sendTestNotification")
-    Call<TestNotificationResponse> sendTestNotification(@Body TestNotificationRequest request);
+    Call<LogoutResponse> logout(@Body Map<String, String> body);
 
     @POST("/api/checkDuplicate")
     Call<RegisterActivity.CheckDuplicateResponse> checkDuplicate(@Body Map<String, String> body);
@@ -40,4 +37,21 @@ public interface LoginService {
     @POST("/api/calcBedCounts")
     Call<CalcBedCountsResponse> calcBedCounts(@Body Map<String, String> body);
 
+    @POST("/api/getPendingTempGuardianRequests")
+    Call<GetPendingRequestsResponse> getPendingTempGuardianRequests(@Body Map<String, String> params);
+
+    @POST("/api/acceptTempGuardianRequest")
+    Call<AcceptRequestResponse> acceptRequest(@Body Map<String, String> params);
+
+    @POST("/api/rejectTempGuardianRequest")
+    Call<RejectRequestResponse> rejectRequest(@Body Map<String, String> params);
+
+    @POST("/api/checkGuardBed")
+    Call<CheckGuardBedResponse> checkGuardBed(@Body Map<String, String> params);
+
+    @POST("/api/updateBedDesignation")
+    Call<Map<String, Object>> updateBedDesignation(@Body Map<String, String> params);
+
+    @POST("/api/updateBedOrder")
+    Call<Map<String, Object>> updateBedOrder(@Body Map<String, Object> params);
 }

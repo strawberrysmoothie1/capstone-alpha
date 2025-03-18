@@ -2,6 +2,9 @@ package com.example.myapplication.item;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
+import android.os.Handler;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -9,6 +12,7 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.NumberPicker;
 import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -16,12 +20,17 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.example.myapplication.AddBedActivity;
 import com.example.myapplication.Login_network.AddGuardBedResponse;
 import com.example.myapplication.Login_network.CheckBedInfoResponse;
+import com.example.myapplication.Login_network.CheckGuardBedResponse;
+import com.example.myapplication.MainActivity;
 import com.example.myapplication.R;
 import com.example.myapplication.model.BedDisplay;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.stream.IntStream;
+
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
@@ -56,33 +65,54 @@ public class BedAdapter extends RecyclerView.Adapter<BedAdapter.BedViewHolder> {
         if ("침대추가".equals(bed.getDesignation())) {
             holder.ivBedImage.setImageResource(R.drawable.addbed);
             holder.btnSetting.setVisibility(View.GONE);
-            holder.itemView.setOnClickListener(v -> showAddBedDialog());
+            holder.itemView.setOnClickListener(v -> {
+                if (context instanceof AddBedActivity) {
+                    ((AddBedActivity) context).scrollToPosition(holder.getAdapterPosition());
+                }
+                new Handler().postDelayed(() -> showAddBedDialog(), 300);
+            });
         } else {
             int[] images = {R.drawable.babybed1, R.drawable.babybed2, R.drawable.babybed3};
             int index = random.nextInt(images.length);
             holder.ivBedImage.setImageResource(images[index]);
             holder.btnSetting.setVisibility(View.VISIBLE);
-            holder.itemView.setOnClickListener(null);
+            holder.itemView.setOnClickListener(v -> {
+                if (context instanceof AddBedActivity) {
+                    ((AddBedActivity) context).scrollToPosition(holder.getAdapterPosition());
+                    
+                    // 침대 버튼 클릭 시 MainActivity로 이동하고 침대 명칭 전달
+                    if (!"침대추가".equals(bed.getDesignation())) {
+                        Intent intent = new Intent(context, MainActivity.class);
+                        intent.putExtra("bedDesignation", bed.getDesignation());
+                        intent.putExtra("bedID", bed.getBedID());
+                        context.startActivity(intent);
+                    }
+                }
+            });
 
             // 설정 버튼 클릭 시 팝업 메뉴 표시
             holder.btnSetting.setOnClickListener(v -> {
                 PopupMenu popup = new PopupMenu(context, holder.btnSetting);
                 popup.getMenu().add("침대 삭제");
                 popup.getMenu().add("순서 변경");
+                popup.getMenu().add("명칭 변경");
                 // 로그인 사용자가 해당 침대의 보호자라면 "임시보호자 추가" 옵션 추가
                 if ("guardian".equals(bed.getUserRole())) {
                     popup.getMenu().add("임시보호자 추가");
                 }
                 popup.setOnMenuItemClickListener(item -> {
-                    if ("침대 삭제".equals(item.getTitle())) {
+                    String title = item.getTitle().toString();
+                    if ("침대 삭제".equals(title)) {
                         int pos = holder.getAdapterPosition();
                         showDeleteDialog(bed, pos);
                         return true;
-                    } else if ("순서 변경".equals(item.getTitle())) {
-                        Toast.makeText(context, "순서 변경 호출", Toast.LENGTH_SHORT).show();
-                        // TODO: 순서 변경 로직 구현
+                    } else if ("순서 변경".equals(title)) {
+                        showOrderChangeDialog(bed);
                         return true;
-                    } else if ("임시보호자 추가".equals(item.getTitle())) {
+                    } else if ("명칭 변경".equals(title)) {
+                        showDesignationChangeDialog(bed);
+                        return true;
+                    } else if ("임시보호자 추가".equals(title)) {
                         showAddTempGuardianDialog(bed);
                         return true;
                     }
@@ -231,56 +261,390 @@ public class BedAdapter extends RecyclerView.Adapter<BedAdapter.BedViewHolder> {
 
     // 임시보호자 추가 다이얼로그 표시
     private void showAddTempGuardianDialog(BedDisplay bed) {
-        String message = "'" + bed.getDesignation() + "' 침대에 대한 임시 보호자를 추가합니다.";
+        String initialMessage = "'" + bed.getDesignation() + "' 침대에 대한 임시 보호자를 추가합니다.";
         AlertDialog.Builder builder = new AlertDialog.Builder(context);
         builder.setTitle("임시보호자 추가");
 
         // 메시지와 입력 필드를 담을 LinearLayout 생성
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
-        int padding = (int) (16 * context.getResources().getDisplayMetrics().density);
+        int padding = (int)(16 * context.getResources().getDisplayMetrics().density);
         layout.setPadding(padding, padding, padding, padding);
 
-        // 메시지 TextView 생성 및 스타일 적용
         TextView messageView = new TextView(context);
-        messageView.setText(message);
-        messageView.setTextSize(15); // 텍스트 크기를 줄임 (sp 단위)
+        messageView.setText(initialMessage);
+        messageView.setTextSize(15);
         messageView.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(context, R.font.hakgyoansim_geurimilgi));
-        // 메시지와 입력필드 사이에 추가 여백 (예: 16dp)
         LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        messageParams.bottomMargin = (int) (16 * context.getResources().getDisplayMetrics().density);
+        messageParams.bottomMargin = (int)(16 * context.getResources().getDisplayMetrics().density);
         messageView.setLayoutParams(messageParams);
         layout.addView(messageView);
 
-        // 사용자 입력을 위한 EditText 생성
+        // 초기 입력: 임시보호자 아이디 입력
         final EditText input = new EditText(context);
         input.setHint("임시보호자 아이디 입력");
-        input.setTextSize(14); // 텍스트 크기를 줄임
+        input.setTextSize(14);
         input.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(context, R.font.hakgyoansim_geurimilgi));
         layout.addView(input);
 
         builder.setView(layout);
-
         builder.setNegativeButton("취소", (dialog, which) -> dialog.dismiss());
-        builder.setPositiveButton("추가", (dialog, which) -> {
-            String tempGuardianId = input.getText().toString().trim();
-            if (tempGuardianId.isEmpty()) {
-                Toast.makeText(context, "임시보호자 아이디를 입력하세요.", Toast.LENGTH_SHORT).show();
-            } else {
-                // 임시보호자 추가 API 호출 또는 처리 로직 구현
-                Toast.makeText(context, tempGuardianId + " 임시보호자 추가 처리", Toast.LENGTH_SHORT).show();
+        builder.setPositiveButton("확인", null);
+        final AlertDialog dialog = builder.create();
+        dialog.show();
+
+        final String[] verifiedGuardianIdHolder = new String[1];
+
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String btnText = dialog.getButton(AlertDialog.BUTTON_POSITIVE).getText().toString();
+            if ("확인".equals(btnText)) {
+                String guardianId = input.getText().toString().trim();
+                if (guardianId.isEmpty()) {
+                    Toast.makeText(context, "임시보호자 아이디를 입력하세요.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (guardianId.equals(currentUserId)) {
+                    Toast.makeText(context, "본인 아이디 입니다.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                // 두 번째 조건: GuardianLog 테이블에 해당 ID가 있는지 확인
+                Map<String, String> duplicateRequest = new HashMap<>();
+                duplicateRequest.put("gdID", guardianId);
+                loginService.checkDuplicate(duplicateRequest).enqueue(new Callback<com.example.myapplication.RegisterActivity.CheckDuplicateResponse>() {
+                    @Override
+                    public void onResponse(Call<com.example.myapplication.RegisterActivity.CheckDuplicateResponse> call, Response<com.example.myapplication.RegisterActivity.CheckDuplicateResponse> response) {
+                        if (response.isSuccessful() && response.body() != null) {
+                            boolean available = response.body().isAvailable();
+                            if (available) {
+                                Toast.makeText(context, "해당 아이디는 존재하지 않습니다.", Toast.LENGTH_SHORT).show();
+                                return;
+                            } else {
+                                // 세 번째 조건: GuardBed 테이블에 해당 bedID와 guardianId 조합이 이미 등록되어 있는지 확인
+                                Map<String, String> checkRequest = new HashMap<>();
+                                checkRequest.put("gdID", guardianId);
+                                checkRequest.put("bedID", bed.getBedID());
+                                loginService.checkGuardBed(checkRequest).enqueue(new Callback<CheckGuardBedResponse>() {
+                                    @Override
+                                    public void onResponse(Call<CheckGuardBedResponse> call, Response<CheckGuardBedResponse> response) {
+                                        if (response.isSuccessful() && response.body() != null) {
+                                            Log.d("CheckGuardBed", "Raw response: " + response.raw().toString());
+                                            if (response.body().isExists()) {
+                                                Toast.makeText(context, "이미 보호중인 아이디 입니다.", Toast.LENGTH_SHORT).show();
+                                            } else {
+                                                // 모든 검증 통과: 2단계로 전환
+                                                verifiedGuardianIdHolder[0] = guardianId;
+                                                messageView.setText("임시보호기간을 선택하세요.");
+                                                // 제거: 기존 입력 EditText 제거하고 달력 추가
+                                                layout.removeView(input);
+                                                // 미니 달력 뷰 추가
+                                                MiniCalendarView miniCalendarView = new MiniCalendarView(context);
+                                                miniCalendarView.setId(R.id.miniCalendarView);
+                                                layout.addView(miniCalendarView);
+                                                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setText("추가");
+                                            }
+                                        } else {
+                                            Toast.makeText(context, "검증 실패 (GuardBed): 응답이 올바르지 않습니다.", Toast.LENGTH_SHORT).show();
+                                        }
+                                    }
+                                    @Override
+                                    public void onFailure(Call<CheckGuardBedResponse> call, Throwable t) {
+                                        Toast.makeText(context, "검증 실패: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            }
+                        } else {
+                            Toast.makeText(context, "검증 실패 (GuardianLog): 응답이 올바르지 않습니다.", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                    @Override
+                    public void onFailure(Call<com.example.myapplication.RegisterActivity.CheckDuplicateResponse> call, Throwable t) {
+                        Toast.makeText(context, "검증 실패: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } else if ("추가".equals(btnText)) {
+                MiniCalendarView miniCalendarView = (MiniCalendarView) layout.findViewById(R.id.miniCalendarView);
+                String selectedDate = miniCalendarView.getSelectedDate();
+                if (selectedDate.isEmpty()) {
+                    Toast.makeText(context, "임시보호기간을 선택하세요.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                
+                // 임시보호자 추가 API 호출
+                Map<String, String> requestBody = new HashMap<>();
+                requestBody.put("gdID", currentUserId);              // 현재 로그인한 사용자 ID (요청을 보내는 사람)
+                requestBody.put("tempGuardianID", verifiedGuardianIdHolder[0]);  // 임시보호자로 추가될 ID
+                requestBody.put("bedID", bed.getBedID());              // 침대 ID
+                requestBody.put("period", selectedDate);               // 임시보호 종료일
+                
+                Call<AddGuardBedResponse> callAdd = loginService.addGuardBed(requestBody);
+                callAdd.enqueue(new Callback<AddGuardBedResponse>() {
+                    @Override
+                    public void onResponse(Call<AddGuardBedResponse> call, Response<AddGuardBedResponse> response) {
+                        if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
+                            Toast.makeText(context, "임시보호자 추가 성공", Toast.LENGTH_SHORT).show();
+                            dialog.dismiss();
+                            if (context instanceof AddBedActivity) {
+                                ((AddBedActivity) context).recreate();
+                            }
+                        } else {
+                            String errMsg = (response.body() != null) ? response.body().getMessage() : "서버 오류";
+                            Toast.makeText(context, "임시보호자 추가 실패: " + errMsg, Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                    
+                    @Override
+                    public void onFailure(Call<AddGuardBedResponse> call, Throwable t) {
+                        Toast.makeText(context, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                });
             }
         });
-        builder.show();
     }
 
+    // 침대 순서 변경 다이얼로그 표시
+    private void showOrderChangeDialog(BedDisplay bed) {
+        // 현재 사용자의 모든 침대 목록 가져오기 (침대추가 항목 제외)
+        List<BedDisplay> userBeds = new ArrayList<>();
+        for (BedDisplay b : bedDisplayList) {
+            if (!"침대추가".equals(b.getDesignation())) {
+                userBeds.add(b);
+            }
+        }
+        
+        if (userBeds.isEmpty()) {
+            Toast.makeText(context, "순서를 변경할 침대가 없습니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // 현재 침대의 인덱스 찾기
+        int currentIndex = IntStream.range(0, userBeds.size()).filter(i -> userBeds.get(i).getBedID().equals(bed.getBedID())).findFirst().orElse(-1);
+
+        if (currentIndex == -1) {
+            Toast.makeText(context, "침대 정보를 찾을 수 없습니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // 다이얼로그 생성
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle("침대 순서 변경");
+        
+        // 레이아웃 설정
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int)(16 * context.getResources().getDisplayMetrics().density);
+        layout.setPadding(padding, padding, padding, padding);
+        
+        // 안내 메시지
+        TextView messageView = new TextView(context);
+        messageView.setText("'" + bed.getDesignation() + "' 침대의 순서를 변경합니다.");
+        messageView.setTextSize(16);
+        LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        messageParams.bottomMargin = (int)(16 * context.getResources().getDisplayMetrics().density);
+        messageView.setLayoutParams(messageParams);
+        layout.addView(messageView);
+        
+        // 현재 순서 표시
+        TextView currentOrderView = new TextView(context);
+        currentOrderView.setText("현재 순서: " + (currentIndex + 1));
+        currentOrderView.setTextSize(14);
+        LinearLayout.LayoutParams currentOrderParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        currentOrderParams.bottomMargin = (int)(16 * context.getResources().getDisplayMetrics().density);
+        currentOrderView.setLayoutParams(currentOrderParams);
+        layout.addView(currentOrderView);
+        
+        // 순서 선택을 위한 NumberPicker
+        NumberPicker numberPicker = new NumberPicker(context);
+        numberPicker.setMinValue(1);
+        numberPicker.setMaxValue(userBeds.size());
+        numberPicker.setValue(currentIndex + 1); // 1부터 시작하는 인덱스로 설정
+        layout.addView(numberPicker);
+        
+        builder.setView(layout);
+        
+        // 확인 버튼
+        builder.setPositiveButton("적용", (dialog, which) -> {
+            int newPosition = numberPicker.getValue() - 1; // 0부터 시작하는 인덱스로 변환
+            
+            // 순서가 변경된 경우에만 처리
+            if (newPosition != currentIndex) {
+                updateBedOrder(bed, currentIndex, newPosition, userBeds);
+            }
+        });
+        
+        // 취소 버튼
+        builder.setNegativeButton("취소", (dialog, which) -> dialog.dismiss());
+        
+        builder.show();
+    }
+    
+    // 침대 순서 업데이트
+    private void updateBedOrder(BedDisplay bed, int oldPosition, int newPosition, List<BedDisplay> userBeds) {
+        // 서버에 침대 순서 업데이트 요청
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("gdID", currentUserId);
+        requestBody.put("bedID", bed.getBedID());
+        requestBody.put("oldPosition", oldPosition + 1); // 1부터 시작하는 인덱스로 변환
+        requestBody.put("newPosition", newPosition + 1); // 1부터 시작하는 인덱스로 변환
+        
+        // 모든 침대 ID와 순서 정보 추가
+        List<Map<String, Object>> bedOrders = new ArrayList<>();
+        
+        // 새로운 알고리즘 적용
+        // 1. 기존 순서대로 침대 목록 복사
+        List<BedDisplay> reorderedBeds = new ArrayList<>(userBeds);
+        
+        // 2. 이동할 침대 제거
+        BedDisplay movingBed = reorderedBeds.remove(oldPosition);
+        
+        // 3. 새 위치에 침대 삽입
+        reorderedBeds.add(newPosition, movingBed);
+        
+        // 4. 재정렬된 침대 목록에 순서 부여
+        for (int i = 0; i < reorderedBeds.size(); i++) {
+            Map<String, Object> bedOrder = new HashMap<>();
+            bedOrder.put("bedID", reorderedBeds.get(i).getBedID());
+            bedOrder.put("order", i + 1); // 1부터 시작하는 순서
+            bedOrders.add(bedOrder);
+        }
+        
+        requestBody.put("bedOrders", bedOrders);
+        
+        // 서버 API 호출
+        Call<Map<String, Object>> call = loginService.updateBedOrder(requestBody);
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    boolean success = (boolean) response.body().get("success");
+                    if (success) {
+                        Toast.makeText(context, "침대 순서가 변경되었습니다.", Toast.LENGTH_SHORT).show();
+                        
+                        // 화면 새로고침
+                        if (context instanceof AddBedActivity) {
+                            ((AddBedActivity) context).recreate();
+                        }
+                    } else {
+                        String message = (String) response.body().get("message");
+                        Toast.makeText(context, "순서 변경 실패: " + message, Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(context, "서버 응답 오류", Toast.LENGTH_SHORT).show();
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                Toast.makeText(context, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+    
+    // 침대 명칭 변경 다이얼로그 표시
+    private void showDesignationChangeDialog(BedDisplay bed) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context);
+        builder.setTitle("침대 명칭 변경");
+        
+        // 레이아웃 설정
+        LinearLayout layout = new LinearLayout(context);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int padding = (int)(16 * context.getResources().getDisplayMetrics().density);
+        layout.setPadding(padding, padding, padding, padding);
+        
+        // 안내 메시지
+        TextView messageView = new TextView(context);
+        messageView.setText("'" + bed.getDesignation() + "' 침대의 명칭을 변경합니다.");
+        messageView.setTextSize(16);
+        LinearLayout.LayoutParams messageParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        messageParams.bottomMargin = (int)(16 * context.getResources().getDisplayMetrics().density);
+        messageView.setLayoutParams(messageParams);
+        layout.addView(messageView);
+        
+        // 명칭 입력 필드
+        final EditText input = new EditText(context);
+        input.setHint("새 침대 명칭 입력");
+        input.setText(bed.getDesignation()); // 현재 명칭을 기본값으로 설정
+        input.setSelection(input.getText().length()); // 커서를 끝으로 이동
+        layout.addView(input);
+        
+        builder.setView(layout);
+        
+        // 확인 버튼
+        builder.setPositiveButton("적용", null); // 나중에 설정
+        
+        // 취소 버튼
+        builder.setNegativeButton("취소", (dialog, which) -> dialog.dismiss());
+        
+        AlertDialog dialog = builder.create();
+        dialog.show();
+        
+        // 확인 버튼 클릭 리스너 설정 (다이얼로그가 자동으로 닫히지 않도록)
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newDesignation = input.getText().toString().trim();
+            
+            // 입력 검증
+            if (newDesignation.isEmpty()) {
+                Toast.makeText(context, "침대 명칭을 입력하세요.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // 현재 명칭과 동일한 경우 무시
+            if (newDesignation.equals(bed.getDesignation())) {
+                dialog.dismiss();
+                return;
+            }
+            
+            // 서버에 침대 명칭 업데이트 요청
+            updateBedDesignation(bed, newDesignation, dialog);
+        });
+    }
+    
+    // 침대 명칭 업데이트
+    private void updateBedDesignation(BedDisplay bed, String newDesignation, AlertDialog dialog) {
+        // 서버에 침대 명칭 업데이트 요청
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("gdID", currentUserId);
+        requestBody.put("bedID", bed.getBedID());
+        requestBody.put("designation", newDesignation);
+        
+        // 서버 API 호출
+        Call<Map<String, Object>> call = loginService.updateBedDesignation(requestBody);
+        call.enqueue(new Callback<Map<String, Object>>() {
+            @Override
+            public void onResponse(Call<Map<String, Object>> call, Response<Map<String, Object>> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    boolean success = (boolean) response.body().get("success");
+                    if (success) {
+                        dialog.dismiss();
+                        Toast.makeText(context, "침대 명칭이 변경되었습니다.", Toast.LENGTH_SHORT).show();
+                        
+                        // 화면 새로고침
+                        if (context instanceof AddBedActivity) {
+                            ((AddBedActivity) context).recreate();
+                        }
+                    } else {
+                        String message = (String) response.body().get("message");
+                        Toast.makeText(context, "명칭 변경 실패: " + message, Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    Toast.makeText(context, "서버 응답 오류", Toast.LENGTH_SHORT).show();
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<Map<String, Object>> call, Throwable t) {
+                Toast.makeText(context, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
 
     public static class BedViewHolder extends RecyclerView.ViewHolder {
         ImageView ivBedImage;
         TextView tvDesignation;
         ImageButton btnSetting;
-        // btnAddTemp 필드는 더 이상 사용하지 않으므로 제거합니다.
 
         public BedViewHolder(View itemView) {
             super(itemView);

@@ -44,10 +44,10 @@
         <!-- 우측 상단에 별도의 설정 버튼 -->
         <ImageButton
             android:id="@+id/btnSetting"
-            android:layout_width="7dp"
-            android:layout_height="17dp"
+            android:layout_width="10dp"
+            android:layout_height="23dp"
             android:layout_gravity="top"
-            android:layout_margin="1dp"
+            android:layout_margin="0dp"
             android:background="@drawable/setting_dot"
             android:contentDescription="설정" />
     </FrameLayout>

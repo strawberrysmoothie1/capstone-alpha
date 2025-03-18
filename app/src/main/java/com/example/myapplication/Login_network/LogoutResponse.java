@@ -9,4 +9,12 @@ public class LogoutResponse {
     public String getMessage() {
         return message;
     }
+
+    public boolean getSuccess() {
+        return success;
+    }
+    
+    public String getResult() {
+        return success ? "true" : "false";
+    }
 }

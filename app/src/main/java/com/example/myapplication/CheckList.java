@@ -14,8 +14,8 @@ public class CheckList {
         this.loginService = loginService;
     }
 
-    // CheckMyBed 메서드: gdID에 해당하는 bedID 목록을 조회합니다.
-    public void CheckMyBed(String gdID, Callback<CheckMyBedResponse> callback) {
+    // checkMyBed 메서드: gdID에 해당하는 bedID 목록을 조회합니다.
+    public void checkMyBed(String gdID, Callback<CheckMyBedResponse> callback) {
         Map<String, String> requestBody = new HashMap<>();
         requestBody.put("gdID", gdID);
         loginService.checkMyBed(requestBody).enqueue(callback);

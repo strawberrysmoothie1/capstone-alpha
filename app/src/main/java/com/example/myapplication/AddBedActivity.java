@@ -57,6 +57,15 @@ public class AddBedActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_addbed);
 
+        // 인텐트에서 침대 요청 여부 확인
+        boolean hasBedRequests = getIntent().getBooleanExtra("hasBedRequests", false);
+        if (hasBedRequests) {
+            showBedRequestDialog();
+        }
+
+        // 메뉴 버튼 설정
+        setupMenuButton();
+
         preferences = getSharedPreferences("AutoLogin", MODE_PRIVATE);
         loginService = LoginClient.getClient("http://10.0.2.2:5000/").create(LoginService.class);
 
@@ -66,23 +75,6 @@ public class AddBedActivity extends AppCompatActivity {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
         toolbar.setNavigationOnClickListener(v -> finish());
-
-        ImageButton btnMenu = findViewById(R.id.btnMenuAddBed);
-        btnMenu.setOnClickListener(v -> {
-            PopupMenu popupMenu = new PopupMenu(AddBedActivity.this, btnMenu);
-            popupMenu.getMenuInflater().inflate(R.menu.menu_main, popupMenu.getMenu());
-            popupMenu.setOnMenuItemClickListener(item -> {
-                if (item.getItemId() == R.id.menu_logout) {
-                    logout();
-                    return true;
-                } else if (item.getItemId() == R.id.menu_account) {
-                    Toast.makeText(AddBedActivity.this, "계정 관리 선택", Toast.LENGTH_SHORT).show();
-                    return true;
-                }
-                return false;
-            });
-            popupMenu.show();
-        });
 
         recyclerViewBeds = findViewById(R.id.recyclerViewBeds);
         LinearLayoutManager layoutManager = new LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false);
@@ -125,45 +117,73 @@ public class AddBedActivity extends AppCompatActivity {
             }
         });
 
+        // 침대 정보 로드
+        loadBedData();
+
+        // 고정 정보 프레임 초기화
         tvInfoCounts = findViewById(R.id.tvInfoCounts);
         tvInfoAdditional = findViewById(R.id.tvInfoAdditional);
         tvAddBedInstruction = findViewById(R.id.tvAddBedInstruction);
+    }
 
-        final String tempId = preferences.getString("id", "");
-        final String userId = (tempId == null || tempId.isEmpty()) ? preferences.getString("lastLoggedInId", "") : tempId;
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 화면에 진입할 때마다 침대 목록 새로고침
+        loadBedData();
+    }
 
-        // 기존 checkMyBed 호출 (버튼 구성에 사용)
+    // 침대 데이터 로드 메서드
+    private void loadBedData() {
+        String userId = preferences.getString("id", "");
+        if (userId.isEmpty()) {
+            Toast.makeText(this, "사용자 정보가 없습니다. 로그인이 필요합니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        // 침대 정보 조회 API 호출
         CheckList checkList = new CheckList(loginService);
-        checkList.CheckMyBed(userId, new Callback<CheckMyBedResponse>() {
+        checkList.checkMyBed(userId, new Callback<CheckMyBedResponse>() {
             @Override
             public void onResponse(Call<CheckMyBedResponse> call, Response<CheckMyBedResponse> response) {
-                if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
-                    List<List<String>> rawData = response.body().getBedInfo();
-                    System.out.println("GuardBed bedInfo: " + rawData);
-                    List<BedDisplay> bedDisplayList = groupBedData(rawData, userId);
-                    bedAdapter = new BedAdapter(AddBedActivity.this, bedDisplayList, userId, loginService);
-                    recyclerViewBeds.setAdapter(bedAdapter);
-                    tvAddBedInstruction.setVisibility(TextView.GONE);
-                    recyclerViewBeds.post(() -> recyclerViewBeds.smoothScrollToPosition(0));
-                    // 초기 중앙 아이템 정보 업데이트
-                    recyclerViewBeds.post(() -> {
-                        View centerView = snapHelper.findSnapView(layoutManager);
-                        if (centerView != null) {
-                            int pos = layoutManager.getPosition(centerView);
-                            updateFixedInfo(pos);
+                if (response.isSuccessful() && response.body() != null) {
+                    CheckMyBedResponse myBedResponse = response.body();
+                    if (myBedResponse.isSuccess()) {
+                        List<List<String>> bedInfo = myBedResponse.getBedInfo();
+                        List<BedDisplay> bedDisplayList = groupBedData(bedInfo, userId);
+                        bedAdapter = new BedAdapter(AddBedActivity.this, bedDisplayList, userId, loginService);
+                        recyclerViewBeds.setAdapter(bedAdapter);
+                        
+                        // 첫 번째 아이템으로 스크롤
+                        if (bedDisplayList.size() > 0) {
+                            recyclerViewBeds.scrollToPosition(0);
+                            updateFixedInfo(0);
                         }
-                    });
+                        
+                        // 침대 개수 계산 API 호출
+                        calcBedCounts();
+                    } else {
+                        Toast.makeText(AddBedActivity.this, "침대 정보 조회 실패", Toast.LENGTH_SHORT).show();
+                    }
                 } else {
-                    tvAddBedInstruction.setText("침대추가");
+                    Toast.makeText(AddBedActivity.this, "서버 응답 오류", Toast.LENGTH_SHORT).show();
                 }
             }
+
             @Override
             public void onFailure(Call<CheckMyBedResponse> call, Throwable t) {
-                tvAddBedInstruction.setText("침대추가");
-                Toast.makeText(AddBedActivity.this, "CheckMyBed 조회 실패: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(AddBedActivity.this, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
+    }
 
+    // 침대 개수 계산 API 호출 메서드
+    private void calcBedCounts() {
+        String userId = preferences.getString("id", "");
+        if (userId.isEmpty()) {
+            return;
+        }
+        
         // 새 calcBedCounts 호출 (백엔드에서는 GdID를 무시함)
         Map<String, String> calcRequest = new HashMap<>();
         calcRequest.put("gdID", userId);
@@ -172,14 +192,53 @@ public class AddBedActivity extends AppCompatActivity {
             public void onResponse(Call<CalcBedCountsResponse> call, Response<CalcBedCountsResponse> response) {
                 if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
                     calcBedCountsList = response.body().getBedCounts();
+                    
+                    // 현재 선택된 아이템의 정보 업데이트
+                    LinearLayoutManager layoutManager = (LinearLayoutManager) recyclerViewBeds.getLayoutManager();
+                    if (layoutManager != null) {
+                        View centerView = new LinearSnapHelper().findSnapView(layoutManager);
+                        if (centerView != null) {
+                            int pos = layoutManager.getPosition(centerView);
+                            updateFixedInfo(pos);
+                        }
+                    }
                 } else {
-                    Toast.makeText(AddBedActivity.this, "calcBedCounts 호출 실패", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(AddBedActivity.this, "침대 개수 계산 실패", Toast.LENGTH_SHORT).show();
                 }
             }
+            
             @Override
             public void onFailure(Call<CalcBedCountsResponse> call, Throwable t) {
-                Toast.makeText(AddBedActivity.this, "calcBedCounts 네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                Toast.makeText(AddBedActivity.this, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
+        });
+    }
+
+    // 메뉴 버튼 설정
+    private void setupMenuButton() {
+        ImageButton btnMenu = findViewById(R.id.btnMenuAddBed);
+        btnMenu.setOnClickListener(view -> {
+            PopupMenu popupMenu = new PopupMenu(AddBedActivity.this, btnMenu);
+            popupMenu.getMenuInflater().inflate(R.menu.menu_main, popupMenu.getMenu());
+            
+            popupMenu.setOnMenuItemClickListener(item -> {
+                int itemId = item.getItemId();
+                if (itemId == R.id.menu_logout) {
+                    logout();
+                    return true;
+                } else if (itemId == R.id.menu_messages) {
+                    // 메시지 화면으로 이동
+                    Intent intent = new Intent(AddBedActivity.this, MessagesActivity.class);
+                    startActivity(intent);
+                    return true;
+                } else if (itemId == R.id.menu_account) {
+                    // 설정 화면으로 이동 (구현 필요)
+                    Toast.makeText(AddBedActivity.this, "설정 메뉴를 선택했습니다.", Toast.LENGTH_SHORT).show();
+                    return true;
+                }
+                return false;
+            });
+            popupMenu.show();
         });
     }
 
@@ -208,9 +267,27 @@ public class AddBedActivity extends AppCompatActivity {
             int tempCount = 0;
             String userRole = "";
             String designation = groupRows.get(0).get(2);
+            
+            // designation이 !로 시작하는 경우 (아직 수락되지 않은 임시보호자 요청) 건너뛰기
+            if (designation != null && designation.startsWith("!")) {
+                continue;
+            }
+            
             String serialNumber = groupRows.get(0).get(5);
             String periodForDisplay = "";
             int remainingDays = 0;
+            int bedOrder = 0;
+            
+            try {
+                // bed_order 값 가져오기
+                String bedOrderStr = groupRows.get(0).get(4);
+                if (bedOrderStr != null && !bedOrderStr.isEmpty()) {
+                    bedOrder = Integer.parseInt(bedOrderStr);
+                }
+            } catch (NumberFormatException e) {
+                bedOrder = 0;
+            }
+            
             for (List<String> row : groupRows) {
                 String period = row.get(3);
                 if (period == null || period.isEmpty() || period.equalsIgnoreCase("null")) {
@@ -239,8 +316,14 @@ public class AddBedActivity extends AppCompatActivity {
                     }
                 }
             }
-            list.add(new BedDisplay(bedID, designation, guardianCount, tempCount, userRole, serialNumber, periodForDisplay, remainingDays));
+            BedDisplay bedDisplay = new BedDisplay(bedID, designation, guardianCount, tempCount, userRole, serialNumber, periodForDisplay, remainingDays);
+            bedDisplay.setBedOrder(bedOrder); // bed_order 값 설정
+            list.add(bedDisplay);
         }
+        
+        // bed_order 값으로 정렬
+        list.sort((bed1, bed2) -> Integer.compare(bed1.getBedOrder(), bed2.getBedOrder()));
+        
         // 마지막에 항상 "침대추가" 항목 추가
         list.add(new BedDisplay("", "침대추가", 0, 0, "", "", "", 0));
         return list;
@@ -287,9 +370,16 @@ public class AddBedActivity extends AppCompatActivity {
 
                 TextView tvAdditional = findViewById(R.id.tvInfoAdditional);
                 if ("temp".equals(bed.getUserRole())) {
-                    int n = (matchingCount != null) ? matchingCount.getRemainingDays() : bed.getRemainingDays();
-                    tvAdditional.setText("임시보호까지 " + n + "일 남음");
-                    if (n <= 3) {
+                    // 항상 서버에서 받은 남은 일수 값을 우선적으로 사용
+                    int remainingDays = 0;
+                    if (matchingCount != null) {
+                        remainingDays = matchingCount.getRemainingDays();
+                    } else {
+                        // 서버에서 받은 데이터가 없는 경우에만 로컬 계산 값 사용
+                        remainingDays = bed.getRemainingDays();
+                    }
+                    tvAdditional.setText("임시보호까지 " + remainingDays + "일 남음");
+                    if (remainingDays <= 3) {
                         tvAdditional.setTextColor(getResources().getColor(android.R.color.holo_red_dark));
                     } else {
                         tvAdditional.setTextColor(getResources().getColor(android.R.color.black));
@@ -314,7 +404,7 @@ public class AddBedActivity extends AppCompatActivity {
             return;
         }
         LogoutRequest logoutRequest = new LogoutRequest(userId);
-        Call<LogoutResponse> call = loginService.logout(logoutRequest);
+        Call<LogoutResponse> call = loginService.logout(logoutRequest.toMap());
         call.enqueue(new Callback<LogoutResponse>() {
             @Override
             public void onResponse(Call<LogoutResponse> call, Response<LogoutResponse> response) {
@@ -335,5 +425,25 @@ public class AddBedActivity extends AppCompatActivity {
                 Toast.makeText(AddBedActivity.this, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
+    }
+
+    // 침대 요청 다이얼로그 표시
+    private void showBedRequestDialog() {
+        new androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("침대 권한 요청")
+            .setMessage("새로운 침대 권한 요청이 있습니다.\n메시지함을 확인하시겠습니까?")
+            .setPositiveButton("확인", (dialog, which) -> {
+                Intent intent = new Intent(AddBedActivity.this, MessagesActivity.class);
+                startActivity(intent);
+            })
+            .setNegativeButton("나중에", null)
+            .show();
+    }
+
+    // 특정 위치로 스크롤하는 메소드 추가
+    public void scrollToPosition(int position) {
+        if (recyclerViewBeds != null) {
+            recyclerViewBeds.smoothScrollToPosition(position);
+        }
     }
 }
