@@ -446,10 +446,7 @@ public class MessagesActivity extends AppCompatActivity implements MessageAdapte
             
             popupMenu.setOnMenuItemClickListener(item -> {
                 int itemId = item.getItemId();
-                if (itemId == R.id.menu_logout) {
-                    logout();
-                    return true;
-                } else if (itemId == R.id.menu_messages) {
+                if (itemId == R.id.menu_messages) {
                     // 이미 메시지 화면에 있으므로 무시
                     return true;
                 } else if (itemId == R.id.menu_account) {

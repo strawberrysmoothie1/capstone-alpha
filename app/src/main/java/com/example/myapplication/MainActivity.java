@@ -133,10 +133,7 @@ public class MainActivity extends AppCompatActivity {
             
             popupMenu.setOnMenuItemClickListener(item -> {
                 int itemId = item.getItemId();
-                if (itemId == R.id.menu_logout) {
-                    logout();
-                    return true;
-                } else if (itemId == R.id.menu_messages) {
+                if (itemId == R.id.menu_messages) {
                     // 메시지 화면으로 이동
                     Intent intent = new Intent(MainActivity.this, MessagesActivity.class);
                     startActivity(intent);

@@ -27,8 +27,8 @@
         android:layout_height="?attr/actionBarSize"
         android:background="@android:drawable/editbox_background"
         android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar"
-        android:fontFamily="@font/hakgyoansim_geurimilgi"
         app:title="침대 선택"
+        android:fontFamily="@font/hakgyoansim"
         app:titleTextColor="#000000"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -44,7 +44,7 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="메뉴 버튼"
             android:scaleType="centerInside"
-            android:src="@drawable/menu_send" />
+            android:src="@android:drawable/ic_menu_more" />
     </androidx.appcompat.widget.Toolbar>
 
     <!-- RecyclerView: 침대 버튼들을 가로로 표시 -->
