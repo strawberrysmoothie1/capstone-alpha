@@ -57,7 +57,7 @@ public class SettingsActivity extends AppCompatActivity {
         switchNotification = findViewById(R.id.switchNotification);
 
         // 사용자 정보 표시
-        String userID = preferences.getString("id", "");
+        String userID = preferences.getString("userID", "");
         String joinDate = preferences.getString("joinDate", "");
         tvUserID.setText(userID);
         tvJoinDate.setText(joinDate);
@@ -135,11 +135,26 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void logout() {
-        String userId = preferences.getString("id", "");
-        if (userId.isEmpty()) {
-            Toast.makeText(SettingsActivity.this, "저장된 사용자 정보가 없습니다.", Toast.LENGTH_SHORT).show();
+        String userId = preferences.getString("userID", "");
+        
+        // 로컬 로그아웃 처리 함수
+        Runnable localLogout = () -> {
+            // 모든 로그인 정보 삭제
+            preferences.edit()
+                .remove("userID")
+                .remove("autoLoginID")
+                .remove("password")
+                .putBoolean("autoLogin", false)
+                .apply();
+
+            Toast.makeText(SettingsActivity.this, "로그아웃 되었습니다.", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(SettingsActivity.this, LogActivity.class));
             finish();
+        };
+        
+        // 사용자 ID가 없는 경우 로컬 로그아웃만 진행
+        if (userId.isEmpty()) {
+            localLogout.run();
             return;
         }
 
@@ -148,29 +163,15 @@ public class SettingsActivity extends AppCompatActivity {
         call.enqueue(new Callback<LogoutResponse>() {
             @Override
             public void onResponse(Call<LogoutResponse> call, Response<LogoutResponse> response) {
-                if (response.isSuccessful() && response.body() != null) {
-                    LogoutResponse result = response.body();
-                    if (result.isSuccess()) {
-                        // 자동 로그인 정보 삭제
-                        preferences.edit()
-                                .remove("id")
-                                .remove("password")
-                                .apply();
-
-                        Toast.makeText(SettingsActivity.this, "로그아웃 되었습니다.", Toast.LENGTH_SHORT).show();
-                        startActivity(new Intent(SettingsActivity.this, LogActivity.class));
-                        finish();
-                    } else {
-                        Toast.makeText(SettingsActivity.this, "로그아웃 실패: " + result.getMessage(), Toast.LENGTH_SHORT).show();
-                    }
-                } else {
-                    Toast.makeText(SettingsActivity.this, "서버 응답 오류", Toast.LENGTH_SHORT).show();
-                }
+                // 성공 여부와 상관없이 로컬 로그아웃 진행
+                localLogout.run();
             }
 
             @Override
             public void onFailure(Call<LogoutResponse> call, Throwable t) {
-                Toast.makeText(SettingsActivity.this, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                // 네트워크 오류 시에도 로컬 로그아웃 진행
+                Toast.makeText(SettingsActivity.this, "서버 연결 실패, 로컬에서 로그아웃됩니다.", Toast.LENGTH_SHORT).show();
+                localLogout.run();
             }
         });
     }

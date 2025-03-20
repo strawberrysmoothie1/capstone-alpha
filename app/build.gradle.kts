@@ -1,7 +1,7 @@
 import com.android.build.gradle.internal.dsl.BaseAppModuleExtension
 
 plugins {
-    id("com.android.application") version "8.8.0"
+    id("com.android.application") version "8.8.2"
     id("org.jetbrains.kotlin.android") version "1.8.20"
     id("com.google.gms.google-services") // 구글 서비스 플러그인 추가
 }

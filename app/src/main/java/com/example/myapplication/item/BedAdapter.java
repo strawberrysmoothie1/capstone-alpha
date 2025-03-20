@@ -3,6 +3,7 @@ package com.example.myapplication.item;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -482,6 +483,29 @@ public class BedAdapter extends RecyclerView.Adapter<BedAdapter.BedViewHolder> {
     
     // 침대 순서 업데이트
     private void updateBedOrder(BedDisplay bed, int oldPosition, int newPosition, List<BedDisplay> userBeds) {
+        // 1. 기존 순서대로 침대 목록 복사
+        List<BedDisplay> reorderedBeds = new ArrayList<>(userBeds);
+        
+        // 2. 이동할 침대 제거
+        BedDisplay movingBed = reorderedBeds.remove(oldPosition);
+        
+        // 3. 새 위치에 침대 삽입
+        reorderedBeds.add(newPosition, movingBed);
+        
+        // 4. 로컬에도 저장 (서버 오류 시를 대비)
+        try {
+            SharedPreferences preferences = context.getSharedPreferences("BedOrder", Context.MODE_PRIVATE);
+            SharedPreferences.Editor editor = preferences.edit();
+            
+            for (int i = 0; i < reorderedBeds.size(); i++) {
+                BedDisplay currentBed = reorderedBeds.get(i);
+                editor.putInt("order_" + currentBed.getBedID(), i + 1);
+            }
+            editor.apply();
+        } catch (Exception e) {
+            Log.e("BedAdapter", "로컬 저장 오류: " + e.getMessage());
+        }
+        
         // 서버에 침대 순서 업데이트 요청
         Map<String, Object> requestBody = new HashMap<>();
         requestBody.put("gdID", currentUserId);
@@ -492,17 +516,7 @@ public class BedAdapter extends RecyclerView.Adapter<BedAdapter.BedViewHolder> {
         // 모든 침대 ID와 순서 정보 추가
         List<Map<String, Object>> bedOrders = new ArrayList<>();
         
-        // 새로운 알고리즘 적용
-        // 1. 기존 순서대로 침대 목록 복사
-        List<BedDisplay> reorderedBeds = new ArrayList<>(userBeds);
-        
-        // 2. 이동할 침대 제거
-        BedDisplay movingBed = reorderedBeds.remove(oldPosition);
-        
-        // 3. 새 위치에 침대 삽입
-        reorderedBeds.add(newPosition, movingBed);
-        
-        // 4. 재정렬된 침대 목록에 순서 부여
+        // 재정렬된 침대 목록에 순서 부여
         for (int i = 0; i < reorderedBeds.size(); i++) {
             Map<String, Object> bedOrder = new HashMap<>();
             bedOrder.put("bedID", reorderedBeds.get(i).getBedID());

@@ -93,33 +93,40 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void logout() {
-        String userId = preferences.getString("id", "");
-        if (userId.isEmpty()) {
-            Toast.makeText(MainActivity.this, "저장된 사용자 정보가 없습니다.", Toast.LENGTH_SHORT).show();
+        String userId = preferences.getString("userID", "");
+        
+        // 로컬 로그아웃 처리 함수
+        Runnable localLogout = () -> {
+            SharedPreferences.Editor editor = preferences.edit();
+            editor.putBoolean("autoLogin", false);
+            editor.remove("userID");
+            editor.remove("autoLoginID");
+            editor.remove("password");
+            editor.apply();
+            Toast.makeText(MainActivity.this, "로그아웃되었습니다.", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(MainActivity.this, LogActivity.class));
             finish();
+        };
+        
+        // 사용자 ID가 없는 경우 로컬 로그아웃만 진행
+        if (userId.isEmpty()) {
+            localLogout.run();
             return;
         }
+        
         LogoutRequest logoutRequest = new LogoutRequest(userId);
         Call<LogoutResponse> call = loginService.logout(logoutRequest.toMap());
         call.enqueue(new Callback<LogoutResponse>() {
             @Override
             public void onResponse(Call<LogoutResponse> call, Response<LogoutResponse> response) {
-                if (response.isSuccessful()) {
-                    Toast.makeText(MainActivity.this, "로그아웃되었습니다.", Toast.LENGTH_SHORT).show();
-                } else {
-                    Toast.makeText(MainActivity.this, "서버 오류: " + response.code(), Toast.LENGTH_SHORT).show();
-                }
-                SharedPreferences.Editor editor = preferences.edit();
-                editor.putBoolean("autoLogin", false);
-                editor.remove("id");
-                editor.apply();
-                startActivity(new Intent(MainActivity.this, LogActivity.class));
-                finish();
+                // 성공 여부와 상관없이 로컬 로그아웃 진행
+                localLogout.run();
             }
             @Override
             public void onFailure(Call<LogoutResponse> call, Throwable t) {
-                Toast.makeText(MainActivity.this, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                // 네트워크 오류 시에도 로컬 로그아웃 진행
+                Toast.makeText(MainActivity.this, "서버 연결 실패, 로컬에서 로그아웃됩니다.", Toast.LENGTH_SHORT).show();
+                localLogout.run();
             }
         });
     }
@@ -156,7 +163,7 @@ public class MainActivity extends AppCompatActivity {
     // 침대 권한 요청 여부를 확인하고 알림 표시
     private void checkForPendingRequests() {
         Log.d("MainActivity", "침대 권한 요청 확인 시작");
-        String userId = preferences.getString("id", "");
+        String userId = preferences.getString("userID", "");
         if (userId.isEmpty()) {
             Log.d("MainActivity", "사용자 ID가 없습니다.");
             return;

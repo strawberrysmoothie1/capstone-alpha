@@ -135,7 +135,7 @@ public class AddBedActivity extends AppCompatActivity {
 
     // 침대 데이터 로드 메서드
     private void loadBedData() {
-        String userId = preferences.getString("id", "");
+        String userId = preferences.getString("userID", "");
         if (userId.isEmpty()) {
             Toast.makeText(this, "사용자 정보가 없습니다. 로그인이 필요합니다.", Toast.LENGTH_SHORT).show();
             return;
@@ -179,7 +179,7 @@ public class AddBedActivity extends AppCompatActivity {
 
     // 침대 개수 계산 API 호출 메서드
     private void calcBedCounts() {
-        String userId = preferences.getString("id", "");
+        String userId = preferences.getString("userID", "");
         if (userId.isEmpty()) {
             return;
         }
@@ -319,6 +319,16 @@ public class AddBedActivity extends AppCompatActivity {
             list.add(bedDisplay);
         }
         
+        // 로컬 저장소에서 침대 순서 가져오기
+        SharedPreferences orderPrefs = getSharedPreferences("BedOrder", MODE_PRIVATE);
+        for (BedDisplay bed : list) {
+            // 로컬에 저장된 순서가 있으면 해당 순서 사용
+            int localOrder = orderPrefs.getInt("order_" + bed.getBedID(), -1);
+            if (localOrder > 0) {
+                bed.setBedOrder(localOrder);
+            }
+        }
+        
         // bed_order 값으로 정렬
         list.sort((bed1, bed2) -> Integer.compare(bed1.getBedOrder(), bed2.getBedOrder()));
         
@@ -394,7 +404,7 @@ public class AddBedActivity extends AppCompatActivity {
     }
 
     private void logout() {
-        String userId = preferences.getString("id", "");
+        String userId = preferences.getString("userID", "");
         if (userId.isEmpty()) {
             Toast.makeText(AddBedActivity.this, "저장된 사용자 정보가 없습니다.", Toast.LENGTH_SHORT).show();
             startActivity(new Intent(AddBedActivity.this, LogActivity.class));
@@ -413,7 +423,7 @@ public class AddBedActivity extends AppCompatActivity {
                 }
                 SharedPreferences.Editor editor = preferences.edit();
                 editor.putBoolean("autoLogin", false);
-                editor.remove("id");
+                editor.remove("userID");
                 editor.apply();
                 startActivity(new Intent(AddBedActivity.this, LogActivity.class));
                 finish();

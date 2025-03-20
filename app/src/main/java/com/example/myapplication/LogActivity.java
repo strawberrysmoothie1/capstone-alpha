@@ -57,11 +57,18 @@ public class LogActivity extends AppCompatActivity {
 
         // 자동 로그인 체크: autoLogin 플래그와 "id"가 저장되어 있으면 바로 다음 화면으로 이동
         if (preferences.getBoolean("autoLogin", false)) {
-            String savedId = preferences.getString("id", "");
+            String savedId = preferences.getString("autoLoginID", "");
             if (!savedId.isEmpty()) {
                 Toast.makeText(this, "자동 로그인 중...", Toast.LENGTH_SHORT).show();
-                // 로그인한 사용자 정보로 침대 요청 확인
-                checkBedRequests(savedId);
+                // 로그인 시도
+                String savedPassword = preferences.getString("password", "");
+                if (!savedPassword.isEmpty()) {
+                    // 자동 로그인 실행
+                    autoLoginProcess(savedId, savedPassword);
+                } else {
+                    // 비밀번호가 없는 경우 자동 로그인 비활성화
+                    preferences.edit().putBoolean("autoLogin", false).apply();
+                }
                 return;  // 로그인 화면을 더 이상 표시하지 않음
             }
         }
@@ -89,10 +96,20 @@ public class LogActivity extends AppCompatActivity {
                         if (result.isSuccess()) {
                             // 자동 로그인 설정 저장 및 SharedPreferences 업데이트
                             SharedPreferences.Editor editor = preferences.edit();
-                            editor.putString("lastLoggedInId", id);
-                            // 수정된 부분: 항상 "id" 키에 값을 저장함.
-                            editor.putBoolean("autoLogin", cbAutoLogin.isChecked());
-                            editor.putString("id", id);
+                            // 사용자 ID는 항상 저장
+                            editor.putString("userID", id);
+                            
+                            // 자동 로그인 여부에 따라 다르게 처리
+                            if (cbAutoLogin.isChecked()) {
+                                editor.putBoolean("autoLogin", true);
+                                editor.putString("autoLoginID", id);
+                                editor.putString("password", password);
+                            } else {
+                                // 일반 로그인 시 자동 로그인 정보 삭제
+                                editor.putBoolean("autoLogin", false);
+                                editor.remove("autoLoginID");
+                                editor.remove("password");
+                            }
                             editor.apply();
 
                             Toast.makeText(LogActivity.this, "로그인 성공!", Toast.LENGTH_SHORT).show();
@@ -131,9 +148,9 @@ public class LogActivity extends AppCompatActivity {
     
     // 침대 권한 요청 확인 메서드
     private void checkBedRequests(String userId) {
-        // 'id' 키에 값이 없으면 'lastLoggedInId' 키의 값을 사용합니다.
+        // 'id' 키에 값이 없으면 'userID' 키의 값을 사용
         if (userId == null || userId.isEmpty()) {
-            userId = preferences.getString("lastLoggedInId", "");
+            userId = preferences.getString("userID", "");
         }
         if (userId.isEmpty()) {
             Log.d(TAG, "사용자 ID가 없어 침대 요청을 확인할 수 없습니다.");
@@ -232,5 +249,49 @@ public class LogActivity extends AppCompatActivity {
         intent.putExtra("hasBedRequests", hasBedRequests);
         startActivity(intent);
         finish();
+    }
+
+    // 자동 로그인 처리 메서드
+    private void autoLoginProcess(String id, String password) {
+        LoginRequest request = new LoginRequest(id, password, true);
+        Call<LoginResponse> call = loginService.login(request);
+        call.enqueue(new Callback<LoginResponse>() {
+            @Override
+            public void onResponse(Call<LoginResponse> call, Response<LoginResponse> response) {
+                if (response.isSuccessful() && response.body() != null) {
+                    LoginResponse result = response.body();
+                    if (result.isSuccess()) {
+                        // 사용자 ID 업데이트
+                        preferences.edit().putString("userID", id).apply();
+                        
+                        // 로그인 성공 후 침대 권한 요청 확인
+                        checkBedRequests(id);
+                    } else {
+                        // 자동 로그인 실패 시 로그인 화면으로
+                        Toast.makeText(LogActivity.this, "자동 로그인 실패: " + result.getMessage(), Toast.LENGTH_SHORT).show();
+                        // 자동 로그인 정보 삭제
+                        preferences.edit()
+                            .putBoolean("autoLogin", false)
+                            .remove("autoLoginID")
+                            .remove("password")
+                            .apply();
+                    }
+                } else {
+                    // 자동 로그인 실패 시 로그인 화면으로
+                    Toast.makeText(LogActivity.this, "자동 로그인 실패", Toast.LENGTH_SHORT).show();
+                    // 자동 로그인 정보 삭제
+                    preferences.edit()
+                        .putBoolean("autoLogin", false)
+                        .remove("autoLoginID")
+                        .remove("password")
+                        .apply();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<LoginResponse> call, Throwable t) {
+                Toast.makeText(LogActivity.this, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 }

@@ -63,7 +63,7 @@ public class MessagesActivity extends AppCompatActivity implements MessageAdapte
             loginService = LoginClient.getClient("http://10.0.2.2:5000/").create(LoginService.class);
             
             // 사용자 ID 로깅
-            String userId = preferences.getString("id", "");
+            String userId = preferences.getString("userID", "");
             Log.d(TAG, "사용자 ID: " + userId);
 
             // UI 요소 초기화
@@ -113,7 +113,7 @@ public class MessagesActivity extends AppCompatActivity implements MessageAdapte
         Log.d(TAG, "============= loadMessages() 시작 =============");
         try {
             // 사용자 ID 가져오기
-            String userId = preferences.getString("id", "");
+            String userId = preferences.getString("userID", "");
             if (userId.isEmpty()) {
                 Log.e(TAG, "사용자 ID가 없습니다. 로그인이 필요합니다.");
                 Toast.makeText(this, "사용자 ID가 없습니다. 로그인이 필요합니다.", Toast.LENGTH_LONG).show();
@@ -239,7 +239,7 @@ public class MessagesActivity extends AppCompatActivity implements MessageAdapte
     @Override
     public void onAccept(Message message, int position) {
         // 침대 관리 권한 요청 수락 로직
-        String userId = preferences.getString("id", "");
+        String userId = preferences.getString("userID", "");
         String bedId = message.getId(); // 메시지 ID로 저장된 침대 ID
         
         if (userId.isEmpty() || bedId.isEmpty()) {
@@ -366,7 +366,7 @@ public class MessagesActivity extends AppCompatActivity implements MessageAdapte
     @Override
     public void onReject(Message message, int position) {
         // 침대 관리 권한 요청 거절 로직
-        String userId = preferences.getString("id", "");
+        String userId = preferences.getString("userID", "");
         String bedId = message.getId(); // 메시지 ID로 저장된 침대 ID
         
         if (userId.isEmpty() || bedId.isEmpty()) {
@@ -464,7 +464,12 @@ public class MessagesActivity extends AppCompatActivity implements MessageAdapte
     private void logout() {
         // 로그아웃 로직 구현
         // 예: 로그인 정보 제거 및 로그인 화면으로 이동
-        preferences.edit().clear().apply();
+        preferences.edit()
+            .remove("userID")
+            .remove("autoLoginID")
+            .remove("password")
+            .putBoolean("autoLogin", false)
+            .apply();
         Intent intent = new Intent(MessagesActivity.this, LogActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
