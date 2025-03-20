@@ -65,7 +65,9 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.MessageV
         }
 
         // 수락/거절 버튼 설정 (guard_request 타입에 한해서)
-        if (message.isRequiresAction() && "guard_request".equals(message.getType())) {
+        if (message.isRequiresAction() && 
+            (message.getMessageType() == Message.MessageType.TEMP_GUARDIAN_REQUEST || 
+             "guard_request".equals(message.getType()))) {
             holder.layoutActions.setVisibility(View.VISIBLE);
             holder.btnAccept.setOnClickListener(v -> {
                 if (listener != null) {

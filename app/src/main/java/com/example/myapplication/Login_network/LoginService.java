@@ -54,4 +54,7 @@ public interface LoginService {
 
     @POST("/api/updateBedOrder")
     Call<Map<String, Object>> updateBedOrder(@Body Map<String, Object> params);
+
+    @POST("/api/deleteAccount")
+    Call<DeleteAccountResponse> deleteAccount(@Body Map<String, String> params);
 }

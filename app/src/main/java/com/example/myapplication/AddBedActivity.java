@@ -47,8 +47,7 @@ public class AddBedActivity extends AppCompatActivity {
     private RecyclerView recyclerViewBeds;
     private BedAdapter bedAdapter;
     private TextView tvInfoCounts, tvInfoAdditional;
-    private TextView tvAddBedInstruction;
-
+    
     // calcBedCounts 결과 저장
     private List<BedCount> calcBedCountsList = new ArrayList<>();
 
@@ -123,7 +122,6 @@ public class AddBedActivity extends AppCompatActivity {
         // 고정 정보 프레임 초기화
         tvInfoCounts = findViewById(R.id.tvInfoCounts);
         tvInfoAdditional = findViewById(R.id.tvInfoAdditional);
-        tvAddBedInstruction = findViewById(R.id.tvAddBedInstruction);
     }
 
     @Override
@@ -253,12 +251,7 @@ public class AddBedActivity extends AppCompatActivity {
             }
         }
         List<BedDisplay> list = new ArrayList<>();
-        DateTimeFormatter formatter = null;
-        LocalDate today = null;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-            today = LocalDate.now();
-        }
+        
         for (String bedID : groupMap.keySet()) {
             List<List<String>> groupRows = groupMap.get(bedID);
             int guardianCount = 0;
@@ -298,17 +291,31 @@ public class AddBedActivity extends AppCompatActivity {
                     if (row.get(0).equals(currentUserId)) {
                         userRole = "temp";
                         periodForDisplay = period;
-                        if (today != null && formatter != null) {
+                        
+                        // 서버에서 전달받은 남은 일수 정보 (리스트 크기가 7 이상인 경우)
+                        if (row.size() >= 7 && row.get(6) != null && !row.get(6).isEmpty()) {
                             try {
-                                LocalDate periodDate = null;
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    periodDate = LocalDate.parse(period, formatter);
-                                }
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    remainingDays = (int) ChronoUnit.DAYS.between(today, periodDate);
-                                }
-                            } catch (Exception e) {
+                                remainingDays = Integer.parseInt(row.get(6));
+                            } catch (NumberFormatException e) {
+                                // 기본값 유지
                                 remainingDays = 0;
+                            }
+                        } else {
+                            // 서버에서 정보가 없는 경우 로컬 계산 사용 (기존 코드)
+                            DateTimeFormatter formatter = null;
+                            LocalDate today = null;
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                                today = LocalDate.now();
+                                try {
+                                    LocalDate periodDate = null;
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        periodDate = LocalDate.parse(period, formatter);
+                                        remainingDays = (int) ChronoUnit.DAYS.between(today, periodDate);
+                                    }
+                                } catch (Exception e) {
+                                    remainingDays = 0;
+                                }
                             }
                         }
                     }

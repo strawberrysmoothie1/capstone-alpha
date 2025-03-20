@@ -197,41 +197,65 @@ public class MessagesActivity extends AppCompatActivity implements MessageAdapte
     }
 
     private void updateMessages(List<TempGuardianRequest> requests) {
-        Log.d(TAG, "updateMessages() 호출됨 - 요청 수: " + (requests != null ? requests.size() : "null"));
+        Log.d(TAG, "updateMessages() 호출됨: " + requests.size() + "개의 요청");
+        
         messageList.clear();
         
-        if (requests != null && !requests.isEmpty()) {
+        try {
+            if (requests.isEmpty()) {
+                Log.d(TAG, "요청 목록이 비어 있음");
+                showNoMessages();
+                return;
+            }
+            
             for (TempGuardianRequest request : requests) {
-                // 요청 정보 로깅
-                Log.d(TAG, "요청 정보: bedID=" + request.getBedID() + 
-                      ", period=" + request.getPeriod() + 
-                      ", bedOrder=" + request.getBedOrder() + 
-                      ", requesterID=" + request.getRequesterID() + 
-                      ", requesterDesignation=" + request.getRequesterDesignation());
-                
-                // Message 객체 생성 및 요청 설정
-                // Message 클래스의 setRequest 메서드가 요청한 형식으로 내용을 구성함
-                Message message = new Message();
-                message.setRequest(request);
-                messageList.add(message);
+                try {
+                    String bedId = request.getBedID();
+                    String period = request.getPeriod();
+                    String requesterID = request.getRequesterID(); // 요청자 ID 가져오기
+                    String requesterDesignation = request.getRequesterDesignation(); // 요청자가 지정한 침대 명칭
+                    
+                    // BedID, 기간을 이용해 Message 객체 생성
+                    // designation이 !로 시작하면 임시보호자 요청으로 간주
+                    Message message = new Message();
+                    message.setId(bedId);
+                    message.setMessageType(Message.MessageType.TEMP_GUARDIAN_REQUEST);
+                    
+                    // 요청 정보 설정
+                    String content = "침대 ID: " + bedId;
+                    if (period != null && !period.isEmpty()) {
+                        content += "\n임시보호 기간: " + period + "까지";
+                    }
+                    // 요청자 ID와 침대 명칭 정보 추가
+                    if (requesterID != null && !requesterID.isEmpty()) {
+                        content += "\n요청자: " + requesterID;
+                        // 요청자가 지정한 침대 명칭이 있으면 괄호 안에 추가
+                        if (requesterDesignation != null && !requesterDesignation.isEmpty()) {
+                            content += " (" + requesterDesignation + ")";
+                        }
+                    }
+                    message.setContent(content);
+                    message.setTimestamp(new Date()); // 현재 시간으로 설정
+                    
+                    messageList.add(message);
+                    
+                    Log.d(TAG, "메시지 추가: " + message.getContent());
+                } catch (Exception e) {
+                    Log.e(TAG, "요청 처리 중 오류: " + e.getMessage(), e);
+                }
             }
             
             // UI 업데이트
-            if (messageAdapter != null) {
-                messageAdapter.notifyDataSetChanged();
-                Log.d(TAG, "어댑터 데이터 갱신 완료");
+            if (messageList.isEmpty()) {
+                showNoMessages();
             } else {
-                Log.e(TAG, "messageAdapter가 null입니다!");
-            }
-            
-            if (tvNoMessages != null) {
                 tvNoMessages.setVisibility(View.GONE);
-            }
-            
-            if (recyclerViewMessages != null) {
                 recyclerViewMessages.setVisibility(View.VISIBLE);
+                messageAdapter.notifyDataSetChanged();
+                Log.d(TAG, "메시지 어댑터 업데이트됨: " + messageList.size() + "개의 메시지");
             }
-        } else {
+        } catch (Exception e) {
+            Log.e(TAG, "updateMessages 처리 중 오류: " + e.getMessage(), e);
             showNoMessages();
         }
     }

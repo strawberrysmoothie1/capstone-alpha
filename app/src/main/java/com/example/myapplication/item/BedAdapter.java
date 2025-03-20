@@ -302,58 +302,69 @@ public class BedAdapter extends RecyclerView.Adapter<BedAdapter.BedViewHolder> {
             if ("확인".equals(btnText)) {
                 String guardianId = input.getText().toString().trim();
                 if (guardianId.isEmpty()) {
-                    Toast.makeText(context, "임시보호자 아이디를 입력하세요.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(context, "아이디를 입력하세요.", Toast.LENGTH_SHORT).show();
                     return;
                 }
+                
+                // 본인 아이디 체크
                 if (guardianId.equals(currentUserId)) {
-                    Toast.makeText(context, "본인 아이디 입니다.", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(context, "본인 아이디는 임시보호자로 추가할 수 없습니다.", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                // 두 번째 조건: GuardianLog 테이블에 해당 ID가 있는지 확인
-                Map<String, String> duplicateRequest = new HashMap<>();
-                duplicateRequest.put("gdID", guardianId);
-                loginService.checkDuplicate(duplicateRequest).enqueue(new Callback<com.example.myapplication.RegisterActivity.CheckDuplicateResponse>() {
+                
+                // "다음" 단계일 때: 먼저 GuardianLog 테이블과 GuardBed 테이블 모두 검증하고 통과 시 2단계로
+                // 1. GuardianLog 테이블에 해당 아이디가 존재하는지 검사
+                Map<String, String> checkParams = new HashMap<>();
+                checkParams.put("id", guardianId);
+                Call<com.example.myapplication.RegisterActivity.CheckDuplicateResponse> checkCall = 
+                    loginService.checkDuplicate(checkParams);
+                
+                checkCall.enqueue(new Callback<com.example.myapplication.RegisterActivity.CheckDuplicateResponse>() {
                     @Override
-                    public void onResponse(Call<com.example.myapplication.RegisterActivity.CheckDuplicateResponse> call, Response<com.example.myapplication.RegisterActivity.CheckDuplicateResponse> response) {
+                    public void onResponse(Call<com.example.myapplication.RegisterActivity.CheckDuplicateResponse> call, 
+                                           Response<com.example.myapplication.RegisterActivity.CheckDuplicateResponse> response) {
                         if (response.isSuccessful() && response.body() != null) {
                             boolean available = response.body().isAvailable();
+                            // available이 true면 사용 가능한 아이디 (즉, 존재하지 않음)
                             if (available) {
-                                Toast.makeText(context, "해당 아이디는 존재하지 않습니다.", Toast.LENGTH_SHORT).show();
+                                Toast.makeText(context, "해당 아이디가 존재하지 않습니다. 가입된 사용자만 임시보호자로 추가할 수 있습니다.", Toast.LENGTH_LONG).show();
                                 return;
-                            } else {
-                                // 세 번째 조건: GuardBed 테이블에 해당 bedID와 guardianId 조합이 이미 등록되어 있는지 확인
-                                Map<String, String> checkRequest = new HashMap<>();
-                                checkRequest.put("gdID", guardianId);
-                                checkRequest.put("bedID", bed.getBedID());
-                                loginService.checkGuardBed(checkRequest).enqueue(new Callback<CheckGuardBedResponse>() {
-                                    @Override
-                                    public void onResponse(Call<CheckGuardBedResponse> call, Response<CheckGuardBedResponse> response) {
-                                        if (response.isSuccessful() && response.body() != null) {
-                                            Log.d("CheckGuardBed", "Raw response: " + response.raw().toString());
-                                            if (response.body().isExists()) {
-                                                Toast.makeText(context, "이미 보호중인 아이디 입니다.", Toast.LENGTH_SHORT).show();
-                                            } else {
-                                                // 모든 검증 통과: 2단계로 전환
-                                                verifiedGuardianIdHolder[0] = guardianId;
-                                                messageView.setText("임시보호기간을 선택하세요.");
-                                                // 제거: 기존 입력 EditText 제거하고 달력 추가
-                                                layout.removeView(input);
-                                                // 미니 달력 뷰 추가
-                                                MiniCalendarView miniCalendarView = new MiniCalendarView(context);
-                                                miniCalendarView.setId(R.id.miniCalendarView);
-                                                layout.addView(miniCalendarView);
-                                                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setText("추가");
-                                            }
-                                        } else {
-                                            Toast.makeText(context, "검증 실패 (GuardBed): 응답이 올바르지 않습니다.", Toast.LENGTH_SHORT).show();
-                                        }
-                                    }
-                                    @Override
-                                    public void onFailure(Call<CheckGuardBedResponse> call, Throwable t) {
-                                        Toast.makeText(context, "검증 실패: " + t.getMessage(), Toast.LENGTH_SHORT).show();
-                                    }
-                                });
                             }
+                            
+                            // 2. GuardBed 테이블에서 이미 보호중인 침대인지 검사
+                            Map<String, String> guardBedParams = new HashMap<>();
+                            guardBedParams.put("gdID", guardianId);
+                            guardBedParams.put("bedID", bed.getBedID());
+                            Call<CheckGuardBedResponse> guardBedCall = loginService.checkGuardBed(guardBedParams);
+                            
+                            guardBedCall.enqueue(new Callback<CheckGuardBedResponse>() {
+                                @Override
+                                public void onResponse(Call<CheckGuardBedResponse> call, Response<CheckGuardBedResponse> response) {
+                                    if (response.isSuccessful() && response.body() != null) {
+                                        Log.d("CheckGuardBed", "Raw response: " + response.raw().toString());
+                                        if (response.body().isExists()) {
+                                            Toast.makeText(context, "이미 보호중인 아이디 입니다.", Toast.LENGTH_SHORT).show();
+                                        } else {
+                                            // 모든 검증 통과: 2단계로 전환
+                                            verifiedGuardianIdHolder[0] = guardianId;
+                                            messageView.setText("임시보호기간을 선택하세요.");
+                                            // 제거: 기존 입력 EditText 제거하고 달력 추가
+                                            layout.removeView(input);
+                                            // 미니 달력 뷰 추가
+                                            MiniCalendarView miniCalendarView = new MiniCalendarView(context);
+                                            miniCalendarView.setId(R.id.miniCalendarView);
+                                            layout.addView(miniCalendarView);
+                                            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setText("추가");
+                                        }
+                                    } else {
+                                        Toast.makeText(context, "검증 실패 (GuardBed): 응답이 올바르지 않습니다.", Toast.LENGTH_SHORT).show();
+                                    }
+                                }
+                                @Override
+                                public void onFailure(Call<CheckGuardBedResponse> call, Throwable t) {
+                                    Toast.makeText(context, "검증 실패: " + t.getMessage(), Toast.LENGTH_SHORT).show();
+                                }
+                            });
                         } else {
                             Toast.makeText(context, "검증 실패 (GuardianLog): 응답이 올바르지 않습니다.", Toast.LENGTH_SHORT).show();
                         }
@@ -373,23 +384,31 @@ public class BedAdapter extends RecyclerView.Adapter<BedAdapter.BedViewHolder> {
                 
                 // 임시보호자 추가 API 호출
                 Map<String, String> requestBody = new HashMap<>();
-                requestBody.put("gdID", currentUserId);              // 현재 로그인한 사용자 ID (요청을 보내는 사람)
-                requestBody.put("tempGuardianID", verifiedGuardianIdHolder[0]);  // 임시보호자로 추가될 ID
+                requestBody.put("gdID", verifiedGuardianIdHolder[0]);  // 임시보호자 ID를 gdID로 설정
                 requestBody.put("bedID", bed.getBedID());              // 침대 ID
+                requestBody.put("designation", "!" + currentUserId);    // 요청자 ID 앞에 ! 표시 추가
                 requestBody.put("period", selectedDate);               // 임시보호 종료일
+                requestBody.put("requestedBy", currentUserId);         // 요청자 ID를 별도 파라미터로 전송
                 
                 Call<AddGuardBedResponse> callAdd = loginService.addGuardBed(requestBody);
                 callAdd.enqueue(new Callback<AddGuardBedResponse>() {
                     @Override
                     public void onResponse(Call<AddGuardBedResponse> call, Response<AddGuardBedResponse> response) {
                         if (response.isSuccessful() && response.body() != null && response.body().isSuccess()) {
-                            Toast.makeText(context, "임시보호자 추가 성공", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(context, "임시보호자 요청이 전송되었습니다.", Toast.LENGTH_SHORT).show();
                             dialog.dismiss();
                             if (context instanceof AddBedActivity) {
                                 ((AddBedActivity) context).recreate();
                             }
                         } else {
-                            String errMsg = (response.body() != null) ? response.body().getMessage() : "서버 오류";
+                            String errMsg;
+                            if (response.code() == 409) {
+                                errMsg = "이미 해당 사용자에게 침대 요청을 보냈습니다.";
+                            } else if (response.body() != null) {
+                                errMsg = response.body().getMessage();
+                            } else {
+                                errMsg = "서버 응답 오류 (코드: " + response.code() + ")";
+                            }
                             Toast.makeText(context, "임시보호자 추가 실패: " + errMsg, Toast.LENGTH_SHORT).show();
                         }
                     }

@@ -99,6 +99,11 @@ public class LogActivity extends AppCompatActivity {
                             // 사용자 ID는 항상 저장
                             editor.putString("userID", id);
                             
+                            // 서버에서 받은 가입일 저장
+                            if (result.getJoinDate() != null) {
+                                editor.putString("joinDate", result.getJoinDate());
+                            }
+                            
                             // 자동 로그인 여부에 따라 다르게 처리
                             if (cbAutoLogin.isChecked()) {
                                 editor.putBoolean("autoLogin", true);
@@ -262,7 +267,15 @@ public class LogActivity extends AppCompatActivity {
                     LoginResponse result = response.body();
                     if (result.isSuccess()) {
                         // 사용자 ID 업데이트
-                        preferences.edit().putString("userID", id).apply();
+                        SharedPreferences.Editor editor = preferences.edit();
+                        editor.putString("userID", id);
+                        
+                        // 서버에서 받은 가입일 저장
+                        if (result.getJoinDate() != null) {
+                            editor.putString("joinDate", result.getJoinDate());
+                        }
+                        
+                        editor.apply();
                         
                         // 로그인 성공 후 침대 권한 요청 확인
                         checkBedRequests(id);

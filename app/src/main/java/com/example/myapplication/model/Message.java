@@ -3,6 +3,13 @@ package com.example.myapplication.model;
 import java.util.Date;
 
 public class Message {
+    // MessageType enum 추가
+    public enum MessageType {
+        TEMP_GUARDIAN_REQUEST,
+        NOTIFICATION,
+        SYSTEM
+    }
+    
     private String id;
     private String title;
     private String content;
@@ -11,6 +18,7 @@ public class Message {
     private String type; // 예: "guard_request", "notification", "system", 등
     private boolean requiresAction;
     private TempGuardianRequest request; // 임시 보호자 요청 객체
+    private MessageType messageType; // MessageType enum을 저장할 필드
 
     public Message() {
         this.timestamp = new Date(); // 기본 생성자에서 현재 시간으로 초기화
@@ -18,6 +26,7 @@ public class Message {
         this.requiresAction = true;  // 기본적으로 액션 필요
         this.senderName = "시스템";   // 기본 발신자
         this.title = "임시 보호자 요청"; // 기본 제목
+        this.messageType = MessageType.TEMP_GUARDIAN_REQUEST; // 기본 메시지 타입
     }
 
     public Message(String id, String title, String content, Date timestamp, String senderName, String type, boolean requiresAction) {
@@ -28,6 +37,23 @@ public class Message {
         this.senderName = senderName;
         this.type = type;
         this.requiresAction = requiresAction;
+    }
+
+    // MessageType getter와 setter 추가
+    public MessageType getMessageType() {
+        return messageType;
+    }
+
+    public void setMessageType(MessageType messageType) {
+        this.messageType = messageType;
+        // MessageType에 따라 type 문자열 자동 설정
+        if (messageType == MessageType.TEMP_GUARDIAN_REQUEST) {
+            this.type = "guard_request";
+        } else if (messageType == MessageType.NOTIFICATION) {
+            this.type = "notification";
+        } else if (messageType == MessageType.SYSTEM) {
+            this.type = "system";
+        }
     }
 
     // Getter 및 Setter 메서드
@@ -122,6 +148,9 @@ public class Message {
             }
             
             this.content = contentBuilder.toString();
+            
+            // MessageType 설정
+            this.messageType = MessageType.TEMP_GUARDIAN_REQUEST;
         }
     }
     
@@ -135,6 +164,7 @@ public class Message {
                 ", senderName='" + senderName + '\'' +
                 ", type='" + type + '\'' +
                 ", requiresAction=" + requiresAction +
+                ", messageType=" + messageType +
                 ", request=" + (request != null ? request.toString() : "null") +
                 '}';
     }

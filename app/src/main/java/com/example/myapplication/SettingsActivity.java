@@ -5,6 +5,7 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -19,7 +20,9 @@ import com.example.myapplication.Login_network.LoginClient;
 import com.example.myapplication.Login_network.LoginService;
 import com.example.myapplication.Login_network.LogoutRequest;
 import com.example.myapplication.Login_network.LogoutResponse;
+import com.example.myapplication.Login_network.DeleteAccountResponse;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -110,14 +113,29 @@ public class SettingsActivity extends AppCompatActivity {
         findViewById(R.id.btnDeleteAccount).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                new AlertDialog.Builder(SettingsActivity.this)
-                        .setTitle("계정 삭제")
-                        .setMessage("계정을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")
-                        .setPositiveButton("삭제", (dialog, which) -> {
-                            Toast.makeText(SettingsActivity.this, "이 기능은 아직 구현되지 않았습니다.", Toast.LENGTH_SHORT).show();
-                        })
-                        .setNegativeButton("취소", null)
-                        .show();
+                // 비밀번호 입력 다이얼로그 표시
+                AlertDialog.Builder passwordDialog = new AlertDialog.Builder(SettingsActivity.this);
+                passwordDialog.setTitle("계정 삭제 확인");
+                passwordDialog.setMessage("계정을 삭제하려면 비밀번호를 입력하세요. 이 작업은 되돌릴 수 없습니다.");
+                
+                // 비밀번호 입력 필드 추가
+                final EditText etPassword = new EditText(SettingsActivity.this);
+                etPassword.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+                etPassword.setHint("비밀번호");
+                passwordDialog.setView(etPassword);
+                
+                passwordDialog.setPositiveButton("삭제", (dialog, which) -> {
+                    String password = etPassword.getText().toString().trim();
+                    if (password.isEmpty()) {
+                        Toast.makeText(SettingsActivity.this, "비밀번호를 입력하세요.", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // 계정 삭제 API 호출
+                        deleteAccount(password);
+                    }
+                });
+                
+                passwordDialog.setNegativeButton("취소", null);
+                passwordDialog.show();
             }
         });
 
@@ -172,6 +190,76 @@ public class SettingsActivity extends AppCompatActivity {
                 // 네트워크 오류 시에도 로컬 로그아웃 진행
                 Toast.makeText(SettingsActivity.this, "서버 연결 실패, 로컬에서 로그아웃됩니다.", Toast.LENGTH_SHORT).show();
                 localLogout.run();
+            }
+        });
+    }
+
+    // 계정 삭제 함수
+    private void deleteAccount(String password) {
+        String userId = preferences.getString("userID", "");
+        if (userId.isEmpty()) {
+            Toast.makeText(this, "로그인 정보가 없습니다.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // 진행 상황 다이얼로그 표시
+        AlertDialog progressDialog = new AlertDialog.Builder(this)
+                .setMessage("계정 삭제 중...")
+                .setCancelable(false)
+                .show();
+        
+        // API 호출 파라미터 설정
+        Map<String, String> params = new HashMap<>();
+        params.put("gdID", userId);
+        params.put("password", password);
+        
+        // API 호출
+        Call<DeleteAccountResponse> call = loginService.deleteAccount(params);
+        call.enqueue(new Callback<DeleteAccountResponse>() {
+            @Override
+            public void onResponse(Call<DeleteAccountResponse> call, Response<DeleteAccountResponse> response) {
+                progressDialog.dismiss();
+                
+                if (response.isSuccessful() && response.body() != null) {
+                    DeleteAccountResponse result = response.body();
+                    if (result.isSuccess()) {
+                        Toast.makeText(SettingsActivity.this, "계정이 성공적으로 삭제되었습니다.", Toast.LENGTH_SHORT).show();
+                        
+                        // 모든 로그인 정보 삭제
+                        preferences.edit()
+                            .remove("userID")
+                            .remove("autoLoginID")
+                            .remove("password")
+                            .remove("joinDate")
+                            .putBoolean("autoLogin", false)
+                            .apply();
+                        
+                        // 로그인 화면으로 이동
+                        Intent intent = new Intent(SettingsActivity.this, LogActivity.class);
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                        startActivity(intent);
+                        finish();
+                    } else {
+                        Toast.makeText(SettingsActivity.this, result.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                } else {
+                    try {
+                        String errorBody = response.errorBody() != null ? response.errorBody().string() : "알 수 없는 오류";
+                        if (response.code() == 403) {
+                            Toast.makeText(SettingsActivity.this, "비밀번호가 일치하지 않습니다.", Toast.LENGTH_SHORT).show();
+                        } else {
+                            Toast.makeText(SettingsActivity.this, "오류: " + errorBody, Toast.LENGTH_SHORT).show();
+                        }
+                    } catch (IOException e) {
+                        Toast.makeText(SettingsActivity.this, "오류 발생: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                    }
+                }
+            }
+            
+            @Override
+            public void onFailure(Call<DeleteAccountResponse> call, Throwable t) {
+                progressDialog.dismiss();
+                Toast.makeText(SettingsActivity.this, "네트워크 오류: " + t.getMessage(), Toast.LENGTH_SHORT).show();
             }
         });
     }
